@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LogTrack · Monitor Operacional</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0b0e;--s1:#0f1117;--s2:#161b26;--s3:#1e2436;
+  --b1:#252d42;--b2:#303a55;
+  --t1:#f0f2f8;--t2:#8b95b0;--t3:#4a5270;
+  --acc:#4f8ef7;--acc2:#3d7de8;
+  --ok:#22c55e;--warn:#f59e0b;--err:#f43f5e;--err2:#e11d48;--crit:#ff2d55;
+  --mono:'JetBrains Mono',monospace;--sans:'Inter',sans-serif;
+}
+html,body{height:100%;background:var(--bg);color:var(--t1);font-family:var(--sans);font-size:13px;line-height:1.5}
+
+.shell{display:grid;grid-template-rows:auto auto 1fr;min-height:100vh}
+
+/* TOPBAR */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 24px;height:56px;background:var(--s1);border-bottom:1px solid var(--b1);gap:16px}
+.topbar-left{display:flex;align-items:center;gap:12px}
+.logo-mark{width:30px;height:30px;border-radius:7px;background:linear-gradient(135deg,#4f8ef7,#7c3aed);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11px;font-weight:600;color:#fff;flex-shrink:0}
+.logo-name{font-weight:600;font-size:15px;letter-spacing:-.3px}
+.logo-sep{width:1px;height:18px;background:var(--b1)}
+.logo-sub{font-size:11px;color:var(--t3);letter-spacing:.2px}
+.topbar-right{display:flex;align-items:center;gap:16px}
+.live-pill{display:flex;align-items:center;gap:6px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.2);border-radius:100px;padding:4px 10px;font-size:10px;color:var(--ok);font-family:var(--mono);letter-spacing:.5px}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--ok);animation:blink 2s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.clock{font-family:var(--mono);font-size:11px;color:var(--t3)}
+
+/* FILTERBAR */
+.filterbar{display:flex;align-items:center;gap:10px;padding:10px 24px;background:var(--s1);border-bottom:1px solid var(--b1);flex-wrap:wrap}
+.flabel{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;font-family:var(--mono);white-space:nowrap}
+.fgroup{display:flex;align-items:center;gap:8px}
+select,.fbtn{height:30px;padding:0 10px;background:var(--s2);border:1px solid var(--b1);color:var(--t1);border-radius:6px;font-size:11px;font-family:var(--sans);cursor:pointer;transition:border-color .15s,background .15s;outline:none}
+select:hover,.fbtn:hover{border-color:var(--b2);background:var(--s3)}
+.fbtn-primary{background:var(--acc2);border-color:var(--acc2);color:#fff}
+.fbtn-primary:hover{background:var(--acc);border-color:var(--acc)}
+.fbtn-outline{background:transparent}
+.fdiv{width:1px;height:20px;background:var(--b1)}
+
+/* MAIN */
+main{padding:20px 24px;display:flex;flex-direction:column;gap:16px}
+
+/* ALERT */
+.alert{background:rgba(244,63,94,.06);border:1px solid rgba(244,63,94,.2);border-left:3px solid var(--err);border-radius:8px;padding:12px 16px;font-size:12px;color:var(--t2)}
+.alert strong{color:var(--err);font-weight:500}
+
+/* KPIs */
+.kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+.kpi{background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:16px 18px;position:relative;overflow:hidden;transition:border-color .15s}
+.kpi:hover{border-color:var(--b2)}
+.kpi::after{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.kpi.blue::after{background:var(--acc)}
+.kpi.red::after{background:var(--err)}
+.kpi.amber::after{background:var(--warn)}
+.kpi.crit::after{background:var(--crit)}
+.kpi.green::after{background:var(--ok)}
+.kpi-label{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.7px;font-family:var(--mono);margin-bottom:8px}
+.kpi-value{font-size:30px;font-weight:600;font-family:var(--mono);line-height:1;letter-spacing:-1px;margin-bottom:4px}
+.kpi.red .kpi-value{color:var(--err)}
+.kpi.amber .kpi-value{color:var(--warn)}
+.kpi.crit .kpi-value{color:var(--crit)}
+.kpi.green .kpi-value{color:var(--ok)}
+.kpi.blue .kpi-value{color:var(--acc)}
+.kpi-sub{font-size:11px;color:var(--t3)}
+
+/* CARDS */
+.card{background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:18px 20px}
+.card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.card-title{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--t3);font-family:var(--mono)}
+.card-badge{font-size:10px;background:var(--s2);border:1px solid var(--b1);padding:3px 8px;border-radius:4px;color:var(--t3);font-family:var(--mono)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid3{display:grid;grid-template-columns:2fr 1.2fr 1fr;gap:16px}
+.ch{height:200px;position:relative}
+
+/* REGION */
+.rgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.rcell{background:var(--s2);border:1px solid var(--b1);border-radius:8px;padding:12px;transition:all .15s}
+.rcell:hover{border-color:var(--b2);transform:translateY(-1px)}
+.rname{font-size:10px;color:var(--t3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.rpct{font-size:24px;font-weight:600;font-family:var(--mono);line-height:1;margin-bottom:3px}
+.rinfo{font-size:10px;color:var(--t3)}
+
+/* RANKING */
+.rank-row{display:flex;align-items:center;gap:10px;margin-bottom:9px}
+.rank-num{font-family:var(--mono);font-size:10px;color:var(--t3);min-width:16px}
+.rank-name{font-size:12px;min-width:110px;color:var(--t2)}
+.rank-track{flex:1;height:6px;background:var(--s2);border-radius:3px;overflow:hidden}
+.rank-fill{height:100%;border-radius:3px;transition:width .6s cubic-bezier(.4,0,.2,1)}
+.rank-val{font-family:var(--mono);font-size:11px;color:var(--t3);min-width:32px;text-align:right}
+
+/* TABLE */
+.tscroll{max-height:340px;overflow-y:auto}
+.tscroll::-webkit-scrollbar{width:3px}
+.tscroll::-webkit-scrollbar-thumb{background:var(--b1);border-radius:2px}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;font-family:var(--mono);padding:6px 10px;border-bottom:1px solid var(--b1);font-weight:400;white-space:nowrap;position:sticky;top:0;background:var(--s1);z-index:1}
+td{padding:9px 10px;border-bottom:1px solid rgba(255,255,255,.03);font-size:12px;color:var(--t2)}
+tr:hover td{background:rgba(79,142,247,.04)}
+tr:last-child td{border-bottom:none}
+.tid{font-family:var(--mono);font-size:11px;color:var(--t1)}
+.tcarrier{color:var(--t1)}
+.tdate{font-family:var(--mono);font-size:11px}
+.tdelay{font-family:var(--mono);font-size:12px;font-weight:600}
+
+/* BADGES */
+.badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:4px;font-size:10px;font-family:var(--mono);font-weight:600;letter-spacing:.3px;white-space:nowrap}
+.b-ok{background:rgba(34,197,94,.1);color:var(--ok);border:1px solid rgba(34,197,94,.15)}
+.b-err{background:rgba(244,63,94,.12);color:var(--err);border:1px solid rgba(244,63,94,.18)}
+.b-warn{background:rgba(245,158,11,.1);color:var(--warn);border:1px solid rgba(245,158,11,.15)}
+.b-muted{background:rgba(139,149,176,.08);color:var(--t3);border:1px solid var(--b1)}
+
+/* PRIORITY */
+.prow{display:flex;align-items:center;gap:6px}
+.pdot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.p1{background:var(--crit);box-shadow:0 0 8px rgba(255,45,85,.5)}
+.p2{background:var(--err)}
+.p3{background:var(--warn)}
+.p4{background:var(--ok)}
+.p5{background:var(--t3)}
+.plbl{font-size:10px;font-family:var(--mono);letter-spacing:.3px}
+.c1{color:var(--crit)}.c2{color:var(--err)}.c3{color:var(--warn)}.c4{color:var(--ok)}.c5{color:var(--t3)}
+
+@media(max-width:1100px){.kpi-row{grid-template-columns:repeat(3,1fr)}.grid3{grid-template-columns:1fr 1fr}}
+@media(max-width:760px){.kpi-row{grid-template-columns:1fr 1fr}.grid2,.grid3{grid-template-columns:1fr}.rgrid{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="shell">
+
+<header class="topbar">
+  <div class="topbar-left">
+    <div class="logo-mark">LT</div>
+    <span class="logo-name">LogTrack</span>
+    <div class="logo-sep"></div>
+    <span class="logo-sub">Monitor Operacional de Entregas</span>
+  </div>
+  <div class="topbar-right">
+    <div class="live-pill"><div class="live-dot"></div>TEMPO REAL</div>
+    <div class="clock" id="clock">00:00:00</div>
+  </div>
+</header>
+
+<div class="filterbar">
+  <span class="flabel">Filtros</span>
+  <div class="fgroup">
+    <select id="f-region" onchange="run()">
+      <option value="">Todas as regioes</option>
+      <option>Norte</option><option>Nordeste</option>
+      <option>Centro-Oeste</option><option>Sudeste</option><option>Sul</option>
+    </select>
+    <select id="f-carrier" onchange="run()">
+      <option value="">Todas as transportadoras</option>
+    </select>
+    <select id="f-status" onchange="run()">
+      <option value="">Todos os status</option>
+      <option>Entregue</option><option>Atrasado</option>
+      <option>Em transito</option><option>Cancelado</option>
+    </select>
+  </div>
+  <div class="fdiv"></div>
+  <div class="fgroup">
+    <button class="fbtn fbtn-primary" id="btn-crit" onclick="toggleCrit()">Criticos</button>
+    <button class="fbtn fbtn-outline" onclick="resetF()">Limpar filtros</button>
+  </div>
+  <div class="fdiv"></div>
+  <span class="flabel" id="f-summary" style="color:var(--t2)"></span>
+</div>
+
+<main>
+  <div class="alert" id="alertbox"><span id="alertmsg"></span></div>
+
+  <div class="kpi-row">
+    <div class="kpi blue">
+      <div class="kpi-label">Total</div>
+      <div class="kpi-value" id="k-total">0</div>
+      <div class="kpi-sub">entregas na selecao</div>
+    </div>
+    <div class="kpi red">
+      <div class="kpi-label">Atrasadas</div>
+      <div class="kpi-value" id="k-late">0</div>
+      <div class="kpi-sub" id="k-late-pct"></div>
+    </div>
+    <div class="kpi amber">
+      <div class="kpi-label">Atraso medio</div>
+      <div class="kpi-value" id="k-avg">0</div>
+      <div class="kpi-sub">dias (so atrasadas)</div>
+    </div>
+    <div class="kpi crit">
+      <div class="kpi-label">Atraso maximo</div>
+      <div class="kpi-value" id="k-max">0</div>
+      <div class="kpi-sub" id="k-max-sub">dias</div>
+    </div>
+    <div class="kpi green">
+      <div class="kpi-label">No prazo</div>
+      <div class="kpi-value" id="k-ok">0</div>
+      <div class="kpi-sub" id="k-ok-pct"></div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">% Atraso por transportadora</span>
+        <span class="card-badge" id="cb1"></span>
+      </div>
+      <div class="ch"><canvas id="ch-carrier"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">Distribuicao de status</span>
+        <span class="card-badge" id="cb2"></span>
+      </div>
+      <div class="ch"><canvas id="ch-status"></canvas></div>
+    </div>
+  </div>
+
+  <div class="grid3">
+    <div class="card">
+      <div class="card-head"><span class="card-title">Analise por regiao</span></div>
+      <div class="rgrid" id="rgrid"></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-title">Ranking de atrasos</span></div>
+      <div id="ranking"></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-title">Atrasos por data</span></div>
+      <div class="ch" style="height:160px" id="spark-wrap"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <span class="card-title">Detalhamento das entregas</span>
+      <span class="card-badge" id="cb3"></span>
+    </div>
+    <div class="tscroll">
+      <table>
+        <thead><tr>
+          <th>Prioridade</th><th>Pedido</th><th>Transportadora</th>
+          <th>Regiao</th><th>Prev. Entrega</th><th>Entregue em</th>
+          <th>Atraso</th><th>Status</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+</div>
+
+<script>
+const RAW=[
+  {id:"PED-001",carrier:"TransRapido",  region:"Sudeste",      exp:"2024-11-01",act:"2024-11-03",status:"Entregue"},
+  {id:"PED-002",carrier:"LogBrasil",    region:"Norte",        exp:"2024-11-02",act:"2024-11-06",status:"Entregue"},
+  {id:"PED-003",carrier:"VelozLog",     region:"Nordeste",     exp:"2024-11-03",act:"2024-11-03",status:"Entregue"},
+  {id:"PED-004",carrier:"TransRapido",  region:"Sul",          exp:"2024-11-04",act:"2024-11-09",status:"Atrasado"},
+  {id:"PED-005",carrier:"LogBrasil",    region:"Centro-Oeste", exp:"2024-11-05",act:"2024-11-05",status:"Entregue"},
+  {id:"PED-006",carrier:"NorteExpress", region:"Norte",        exp:"2024-11-06",act:"2024-11-11",status:"Atrasado"},
+  {id:"PED-007",carrier:"VelozLog",     region:"Sudeste",      exp:"2024-11-07",act:"2024-11-08",status:"Entregue"},
+  {id:"PED-008",carrier:"TransRapido",  region:"Nordeste",     exp:"2024-11-08",act:"2024-11-15",status:"Atrasado"},
+  {id:"PED-009",carrier:"LogBrasil",    region:"Sul",          exp:"2024-11-09",act:"2024-11-09",status:"Entregue"},
+  {id:"PED-010",carrier:"NorteExpress", region:"Norte",        exp:"2024-11-10",act:"2024-11-18",status:"Atrasado"},
+  {id:"PED-011",carrier:"VelozLog",     region:"Centro-Oeste", exp:"2024-11-11",act:"2024-11-11",status:"Entregue"},
+  {id:"PED-012",carrier:"TransRapido",  region:"Sudeste",      exp:"2024-11-12",act:"2024-11-14",status:"Entregue"},
+  {id:"PED-013",carrier:"LogBrasil",    region:"Nordeste",     exp:"2024-11-13",act:"2024-11-19",status:"Atrasado"},
+  {id:"PED-014",carrier:"NorteExpress", region:"Sul",          exp:"2024-11-14",act:"2024-11-14",status:"Entregue"},
+  {id:"PED-015",carrier:"VelozLog",     region:"Norte",        exp:"2024-11-15",act:"2024-11-15",status:"Entregue"},
+  {id:"PED-016",carrier:"TransRapido",  region:"Centro-Oeste", exp:"2024-11-16",act:"2024-11-23",status:"Atrasado"},
+  {id:"PED-017",carrier:"LogBrasil",    region:"Sudeste",      exp:"2024-11-17",act:"2024-11-17",status:"Entregue"},
+  {id:"PED-018",carrier:"NorteExpress", region:"Nordeste",     exp:"2024-11-18",act:null,         status:"Em transito"},
+  {id:"PED-019",carrier:"VelozLog",     region:"Sul",          exp:"2024-11-19",act:"2024-11-22",status:"Atrasado"},
+  {id:"PED-020",carrier:"TransRapido",  region:"Norte",        exp:"2024-11-20",act:null,         status:"Cancelado"},
+  {id:"PED-021",carrier:"LogBrasil",    region:"Centro-Oeste", exp:"2024-11-21",act:"2024-11-21",status:"Entregue"},
+  {id:"PED-022",carrier:"NorteExpress", region:"Sudeste",      exp:"2024-11-22",act:"2024-11-29",status:"Atrasado"},
+  {id:"PED-023",carrier:"VelozLog",     region:"Nordeste",     exp:"2024-11-23",act:"2024-11-23",status:"Entregue"},
+  {id:"PED-024",carrier:"TransRapido",  region:"Sul",          exp:"2024-11-24",act:"2024-11-28",status:"Atrasado"},
+  {id:"PED-025",carrier:"LogBrasil",    region:"Norte",        exp:"2024-11-25",act:"2024-11-25",status:"Entregue"},
+  {id:"PED-026",carrier:"NorteExpress", region:"Centro-Oeste", exp:"2024-11-26",act:"2024-12-04",status:"Atrasado"},
+  {id:"PED-027",carrier:"VelozLog",     region:"Sudeste",      exp:"2024-11-27",act:"2024-11-27",status:"Entregue"},
+  {id:"PED-028",carrier:"TransRapido",  region:"Nordeste",     exp:"2024-11-28",act:"2024-12-06",status:"Atrasado"},
+  {id:"PED-029",carrier:"LogBrasil",    region:"Sul",          exp:"2024-11-29",act:"2024-11-29",status:"Entregue"},
+  {id:"PED-030",carrier:"NorteExpress", region:"Norte",        exp:"2024-11-30",act:"2024-12-10",status:"Atrasado"},
+];
+
+const DATA=RAW.map(d=>{
+  let delay=0;
+  if(d.act&&d.exp) delay=Math.max(0,Math.round((new Date(d.act)-new Date(d.exp))/86400000));
+  return {...d,delay};
+});
+
+let critOnly=false;
+let filtered=[];
+let CH={};
+
+window.onload=function(){
+  const sel=document.getElementById('f-carrier');
+  [...new Set(DATA.map(d=>d.carrier))].sort().forEach(c=>{
+    const o=document.createElement('option');o.textContent=c;sel.appendChild(o);
+  });
+  setInterval(function(){
+    document.getElementById('clock').textContent=new Date().toLocaleTimeString('pt-BR');
+  },1000);
+  run();
+};
+
+function run(){
+  const r=document.getElementById('f-region').value;
+  const c=document.getElementById('f-carrier').value;
+  const s=document.getElementById('f-status').value;
+  filtered=DATA.filter(function(d){
+    if(r&&d.region!==r)return false;
+    if(c&&d.carrier!==c)return false;
+    if(s&&d.status!==s)return false;
+    if(critOnly&&d.delay<5&&d.status!=='Cancelado')return false;
+    return true;
+  });
+  document.getElementById('f-summary').textContent=filtered.length+' registros visiveis';
+  renderAll();
+}
+
+function toggleCrit(){
+  critOnly=!critOnly;
+  var b=document.getElementById('btn-crit');
+  if(critOnly){b.style.background='#e11d48';b.style.borderColor='#e11d48';}
+  else{b.style.background='';b.style.borderColor='';}
+  run();
+}
+
+function resetF(){
+  critOnly=false;
+  ['f-region','f-carrier','f-status'].forEach(function(id){document.getElementById(id).value='';});
+  var b=document.getElementById('btn-crit');
+  b.style.background='';b.style.borderColor='';
+  run();
+}
+
+function renderAll(){
+  var late=filtered.filter(function(d){return d.delay>0;});
+  var ontime=filtered.filter(function(d){return d.delay===0&&d.status==='Entregue';});
+  var avgD=late.length?(late.reduce(function(s,d){return s+d.delay;},0)/late.length).toFixed(1):0;
+  var sorted=[].concat(filtered).sort(function(a,b){return b.delay-a.delay;});
+  var maxRow=sorted[0];
+
+  document.getElementById('k-total').textContent=filtered.length;
+  document.getElementById('k-late').textContent=late.length;
+  document.getElementById('k-late-pct').textContent=filtered.length?Math.round(late.length/filtered.length*100)+'% do total':'';
+  document.getElementById('k-avg').textContent=avgD;
+  document.getElementById('k-max').textContent=maxRow?maxRow.delay:0;
+  document.getElementById('k-max-sub').textContent=maxRow?maxRow.id+' - '+maxRow.carrier:'';
+  document.getElementById('k-ok').textContent=ontime.length;
+  document.getElementById('k-ok-pct').textContent=filtered.length?Math.round(ontime.length/filtered.length*100)+'% do total':'';
+
+  var wc=worstCarrier();
+  document.getElementById('alertmsg').innerHTML='<strong>Alerta operacional:</strong> <strong>'+wc.name+'</strong> lidera em atrasos com <strong>'+wc.pct+'% das entregas fora do prazo</strong> ('+wc.count+' pedidos). Verificar capacidade imediatamente.';
+
+  renderCarrier();
+  renderStatus();
+  renderRegion();
+  renderRanking();
+  renderSpark();
+  renderTable();
+  document.getElementById('cb3').textContent=filtered.length+' registros';
+}
+
+function worstCarrier(){
+  var cs=[...new Set(DATA.map(function(d){return d.carrier;}))];
+  var w={name:'',pct:0,count:0};
+  cs.forEach(function(c){
+    var rows=DATA.filter(function(d){return d.carrier===c;});
+    var del=rows.filter(function(d){return d.delay>0;}).length;
+    var pct=Math.round(del/rows.length*100);
+    if(pct>w.pct)w={name:c,pct:pct,count:del};
+  });
+  return w;
+}
+
+function renderCarrier(){
+  var cs=[...new Set(DATA.map(function(d){return d.carrier;}))].sort();
+  var pcts=cs.map(function(c){
+    var rows=filtered.filter(function(d){return d.carrier===c;});
+    if(!rows.length)return 0;
+    return Math.round(rows.filter(function(d){return d.delay>0;}).length/rows.length*100);
+  });
+  var colors=pcts.map(function(p){return p>=60?'#f43f5e':p>=40?'#fb7185':p>=20?'#f59e0b':'#22c55e';});
+  document.getElementById('cb1').textContent=cs.length+' transportadoras';
+  if(CH.c)CH.c.destroy();
+  CH.c=new Chart(document.getElementById('ch-carrier').getContext('2d'),{
+    type:'bar',
+    data:{labels:cs,datasets:[{data:pcts,backgroundColor:colors,borderRadius:4,borderSkipped:false}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return ' '+c.raw+'% atraso';}}}},
+      scales:{
+        y:{beginAtZero:true,max:100,grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#4a5270',callback:function(v){return v+'%';},font:{size:10,family:'JetBrains Mono'}}},
+        x:{grid:{display:false},ticks:{color:'#8b95b0',font:{size:10}}}
+      }
+    }
+  });
+}
+
+function renderStatus(){
+  var ss=['Entregue','Atrasado','Em transito','Cancelado'];
+  var counts=ss.map(function(s){return filtered.filter(function(d){return d.status===s;}).length;});
+  document.getElementById('cb2').textContent=filtered.length+' total';
+  if(CH.s)CH.s.destroy();
+  CH.s=new Chart(document.getElementById('ch-status').getContext('2d'),{
+    type:'doughnut',
+    data:{labels:ss,datasets:[{data:counts,backgroundColor:['#22c55e','#f43f5e','#4f8ef7','#4a5270'],borderWidth:2,borderColor:'#0f1117',hoverOffset:6}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{position:'right',labels:{color:'#8b95b0',font:{size:11},padding:12,boxWidth:10}},
+        tooltip:{callbacks:{label:function(c){return ' '+c.label+': '+c.raw;}}}
+      },
+      cutout:'62%'
+    }
+  });
+}
+
+function renderRegion(){
+  var regs=['Norte','Nordeste','Centro-Oeste','Sudeste','Sul'];
+  var g=document.getElementById('rgrid');
+  g.innerHTML='';
+  regs.forEach(function(r){
+    var rows=filtered.filter(function(d){return d.region===r;});
+    var del=rows.filter(function(d){return d.delay>0;});
+    var pct=rows.length?Math.round(del.length/rows.length*100):null;
+    var color=pct===null?'var(--t3)':pct>=60?'var(--crit)':pct>=40?'var(--err)':pct>=20?'var(--warn)':'var(--ok)';
+    g.innerHTML+='<div class="rcell"><div class="rname">'+r+'</div><div class="rpct" style="color:'+color+'">'+(pct===null?'--':pct+'%')+'</div><div class="rinfo">'+del.length+' atr. / '+rows.length+' total</div></div>';
+  });
+}
+
+function renderRanking(){
+  var cs=[...new Set(DATA.map(function(d){return d.carrier;}))];
+  var ranked=cs.map(function(c){
+    return{name:c,count:filtered.filter(function(d){return d.carrier===c&&d.delay>0;}).length};
+  }).sort(function(a,b){return b.count-a.count;});
+  var max=ranked[0]?ranked[0].count:1;
+  var colors=['#f43f5e','#fb923c','#f59e0b','#22c55e','#4f8ef7'];
+  var el=document.getElementById('ranking');
+  el.innerHTML='';
+  ranked.forEach(function(r,i){
+    var pct=Math.round(r.count/max*100);
+    el.innerHTML+='<div class="rank-row"><span class="rank-num">'+(i+1)+'</span><span class="rank-name">'+r.name+'</span><div class="rank-track"><div class="rank-fill" style="width:'+pct+'%;background:'+(colors[i]||colors[4])+'"></div></div><span class="rank-val">'+r.count+'</span></div>';
+  });
+}
+
+function renderSpark(){
+  var sw=document.getElementById('spark-wrap');
+  var delayed=filtered.filter(function(d){return d.delay>0&&d.act;});
+  var map={};
+  delayed.forEach(function(d){map[d.act]=(map[d.act]||0)+1;});
+  var dates=Object.keys(map).sort();
+  if(!dates.length){sw.innerHTML='<p style="color:var(--t3);font-size:11px;padding-top:8px">Sem dados no filtro atual</p>';return;}
+  if(CH.spark)CH.spark.destroy();
+  var canvas=document.createElement('canvas');
+  sw.innerHTML='';sw.appendChild(canvas);
+  var maxV=Math.max.apply(null,dates.map(function(d){return map[d];}));
+  CH.spark=new Chart(canvas.getContext('2d'),{
+    type:'bar',
+    data:{labels:dates.map(function(d){return d.slice(5);}),datasets:[{data:dates.map(function(d){return map[d];}),backgroundColor:'rgba(244,63,94,.5)',borderRadius:2,borderSkipped:false}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return ' '+c.raw+' atraso(s)';} }}},
+      scales:{
+        y:{beginAtZero:true,max:maxV+1,grid:{color:'rgba(255,255,255,.03)'},ticks:{color:'#4a5270',stepSize:1,font:{size:9,family:'JetBrains Mono'}}},
+        x:{grid:{display:false},ticks:{color:'#4a5270',font:{size:9},maxRotation:45}}
+      }
+    }
+  });
+}
+
+function renderTable(){
+  function pri(d){
+    if(d.status==='Cancelado')return 5;
+    if(d.delay>=8)return 1;
+    if(d.delay>=5)return 2;
+    if(d.delay>=2)return 3;
+    return 4;
+  }
+  var rows=[].concat(filtered).map(function(d){return Object.assign({},d,{pri:pri(d)});}).sort(function(a,b){return a.pri-b.pri||b.delay-a.delay;});
+  var pLabel=['','CRITICO','ALTO','MEDIO','BAIXO','CANCEL.'];
+  var tbody=document.getElementById('tbody');
+  tbody.innerHTML='';
+  rows.forEach(function(d){
+    var p=d.pri;
+    var dc='c'+p;var pc='p'+p;
+    var sCls=d.status==='Entregue'?'b-ok':d.status==='Atrasado'?'b-err':d.status==='Cancelado'?'b-warn':'b-muted';
+    var dCol=p===1?'var(--crit)':p===2?'var(--err)':'var(--warn)';
+    var delayCel=d.delay>0?'<span class="tdelay" style="color:'+dCol+'">+'+d.delay+'d</span>':'<span style="color:var(--t3);font-family:var(--mono)">--</span>';
+    tbody.innerHTML+='<tr><td><div class="prow"><span class="pdot '+pc+'"></span><span class="plbl '+dc+'">'+pLabel[p]+'</span></div></td><td class="tid">'+d.id+'</td><td class="tcarrier">'+d.carrier+'</td><td style="color:var(--t2)">'+d.region+'</td><td class="tdate">'+d.exp+'</td><td class="tdate">'+(d.act||'--')+'</td><td>'+delayCel+'</td><td><span class="badge '+sCls+'">'+d.status+'</span></td></tr>';
+  });
+}
+</script>
+</body>
+</html>
